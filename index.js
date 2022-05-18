@@ -1,7 +1,7 @@
 'use strict'
 
 const { JSDOM } = require('jsdom')
-const defaultConfig = { page: true, img: true, priority: 1, imgSrc: 'src', custom: [] }
+const defaultConfig = { enable: true, page: true, img: true, priority: 1, imgSrc: 'src', custom: [] }
 const { enable, page, img, priority, imgSrc, custom } = { ...defaultConfig, ...(hexo.config.prefetch || {}) }
 // 插件link标签
 function createLink(dom, href) {
