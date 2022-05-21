@@ -1,40 +1,53 @@
 'use strict'
 
-const { JSDOM } = require('jsdom')
-const defaultConfig = { enable: true, page: true, img: true, priority: 1, imgSrc: 'src', custom: [] }
-const { enable, page, img, priority, imgSrc, custom } = { ...defaultConfig, ...(hexo.config.prefetch || {}) }
-// 插件link标签
-function createLink(dom, href) {
-  const link = dom.window.document.createElement('link')
-  link.rel = 'prefetch'
-  link.href = href
-  dom.window.document.head.appendChild(link)
+const { join } = require('path')
+const { readFileSync, statSync } = require('fs')
+const { parse, stringify } = JSON
+
+const node_modules = 'node_modules/prefetch-page/dist/prefetch.attr.js'
+const cwd_node_modules = join(process.cwd(), node_modules)
+const current_node_modules = join(__dirname, node_modules)
+let flag = true
+
+/**
+ * Read file contents
+ * @param {String} file prefetch-page file page
+ * @returns {String}
+ */
+function handler(file) {
+  try {
+    const stat = statSync(file)
+    if (stat.isFile()) return readFileSync(file).toString()
+  } catch (e) {
+    if (flag) {
+      flag = false
+      return handler(current_node_modules)
+    }
+    throw new Error('Not found "prefetch-page" dependency package')
+  }
 }
 
-const prefetchHandler = ({ dom, query, attr }) => {
-  const array = dom.window.document.querySelectorAll(query)
-  array.forEach((el) => createLink(dom, el.getAttribute(attr)))
+/**
+ * Handling script tag attributes
+ * @param {Object} options Hexo-prefetch config
+ * @returns {String}
+ */
+function setAttribute(options) {
+  // Deep Clone
+  options = parse(stringify(options))
+  delete options.enable
+  delete options.entry
+  delete options.pageType
+  let attr = ''
+  // Turning two-dimensional arrays and structuring
+  for (const [k, v] of Object.entries(options)) {
+    attr += `${k}="${v}" `
+  }
+  return attr.trim()
 }
 
-function prefetchCustom(dom, customs) {
-  for (let v of customs) createLink(dom, v)
-}
-
-function prefetch(result) {
-  if (!enable) return
-  const dom = new JSDOM(result)
-  // 预加载页面
-  if (page) prefetchHandler({ dom, query: 'a:not([target=_blank])', attr: 'href' })
-  // 预加载图片
-  if (img) prefetchHandler({ dom, query: 'img', attr: imgSrc })
-  // 自定义预加载
-  prefetchCustom(dom, custom)
-
-  // 判断是否有h5标准头信息
-  const isH5 = result.match(/^<!DOCTYPE html>/i)
-  result = dom.window.document.documentElement.outerHTML
-  if (isH5) isH5[0] += result
-  return result
-}
-
-hexo.extend.filter.register('after_render:html', prefetch, priority)
+hexo.extend.filter.register('after_generate', function () {
+  const { prefetch } = this.config
+  const content = `<script ${setAttribute(prefetch)}>${handler(cwd_node_modules)}</script>`
+  hexo.extend.injector.register(prefetch.entry || 'head_end', content, prefetch.pageType || 'default')
+})
