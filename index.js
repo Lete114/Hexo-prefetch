@@ -4,7 +4,7 @@ const { join } = require('path')
 const { readFileSync, statSync } = require('fs')
 const { parse, stringify } = JSON
 
-const node_modules = 'node_modules/prefetch-page/dist/prefetch.attr.js'
+const node_modules = 'node_modules/prefetch-page/dist/prefetch.js'
 const cwd_node_modules = join(process.cwd(), node_modules)
 const current_node_modules = join(__dirname, node_modules)
 let flag = true
@@ -27,27 +27,13 @@ function handler(file) {
   }
 }
 
-/**
- * Handling script tag attributes
- * @param {Object} options Hexo-prefetch config
- * @returns {String}
- */
-function setAttribute(options) {
-  // Deep Clone
-  options = parse(stringify(options))
+hexo.extend.filter.register('after_generate', function () {
+  const { prefetch } = this.config
+  const options = parse(stringify(prefetch))
   delete options.enable
   delete options.entry
   delete options.pageType
-  let attr = ''
-  // Turning two-dimensional arrays and structuring
-  for (const [k, v] of Object.entries(options)) {
-    attr += `${k}="${v}" `
-  }
-  return attr.trim()
-}
 
-hexo.extend.filter.register('after_generate', function () {
-  const { prefetch } = this.config
-  const content = `<script ${setAttribute(prefetch)}>${handler(cwd_node_modules)}</script>`
+  const content = `<script>${handler(cwd_node_modules)}</script><script>requestIdleCallback(function(){prefetch(${JSON.stringify(options)})})</script>`
   hexo.extend.injector.register(prefetch.entry || 'head_end', content, prefetch.pageType || 'default')
 })
